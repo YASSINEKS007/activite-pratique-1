@@ -1,7 +1,8 @@
 package dao;
 
+import framework.version_annotation.annotations.Component;
 
-
+@Component
 public class DaoImpl implements IDao{
     @Override
     public double getData() {
