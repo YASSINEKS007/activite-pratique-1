@@ -14,6 +14,7 @@ public class TestVersionXml {
         metier.setDao(dao);
 
         System.out.println(metier.calcul());
+
     }
 }
 
