@@ -167,179 +167,175 @@ System.out.println(metier.calcul());
 <h2>Partie 2</h2>
 
 <h3>Structure du projet</h4>
-<img src="partie_2_project_structure.png">
 <h3>Injection des dependances a travers un fichier XML</h3>
 <ol>
     <li>
         <p>Créer la classe DependencyInjector</p>
         <pre><code>package framework.version_xml;
 
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.DocumentBuilder;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
 public class DependencyInjector {
-    private Map<String, Object> components = new HashMap<>();
-    public void loadConfig(String configFile) {
-        try {
-            File file = new File(configFile);
-            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-            Document doc = dBuilder.parse(file);
-            doc.getDocumentElement().normalize();
-            NodeList componentNodes = doc.getElementsByTagName("component");
-            for (int i = 0; i < componentNodes.getLength(); i++) {
-                Element componentElement = (Element) componentNodes.item(i);
-                String componentName = componentElement.getAttribute("name");
-                String componentClass = componentElement.getAttribute("class");
-                // Get constructor with no parameters
-                Object componentInstance = Class.forName(componentClass).getDeclaredConstructor().newInstance();
-                components.put(componentName, componentInstance);
+private Map<String, Object> beans = new HashMap<>();
+    public DependencyInjector(String configFile) throws Exception {
+        File file = new File(configFile);
+        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+        Document doc = dBuilder.parse(file);
+        doc.getDocumentElement().normalize();
+        NodeList nodeList = doc.getElementsByTagName("bean");
+        for (int i = 0; i < nodeList.getLength(); i++) {
+            Element element = (Element) nodeList.item(i);
+            String id = element.getAttribute("id");
+            String className = element.getAttribute("class");
+            Object bean = Class.forName(className).newInstance();
+            NodeList propertyNodes = element.getElementsByTagName("property");
+            for (int j = 0; j < propertyNodes.getLength(); j++) {
+                Element propertyElement = (Element) propertyNodes.item(j);
+                String propertyName = propertyElement.getAttribute("name");
+                String refName = propertyElement.getAttribute("ref");
+                Object refBean = beans.get(refName);
+                if (refBean == null) {
+                    throw new IllegalArgumentException("Dépendance non trouvée : " + refName);
+                }
+                bean.getClass().getMethod("set" + propertyName.substring(0, 1).toUpperCase() + propertyName.substring(1), refBean.getClass().getInterfaces()[0]).invoke(bean, refBean);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+            beans.put(id, bean);
         }
     }
-    public <T> T getComponent(String name, Class<T> type) {
-        return type.cast(components.get(name));
-    }
-    // Add a method to register components with constructor parameters
-    public void registerComponent(String name, Object componentInstance) {
-        components.put(name, componentInstance);
+    public Object getBean(String beanName) {
+        return beans.get(beanName);
     }
 }
+
 </code></pre>
 </li>
 <li>
     <p>Créer le fichier configuration "config.xml"</p>
     <pre><code>
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;config&gt;
-    &lt;component name="metier" class="metier.MetierImpl"&gt;
+    &lt;bean id="dao" class="DaoImpl1"/&gt;
+    &lt;bean id="metier" class="MetierImpl"&gt;
         &lt;property name="dao" ref="dao"/&gt;
-    &lt;/component&gt;
-    &lt;component name="dao" class="dao.DaoImpl"/&gt;
+    &lt;/bean&gt;
 &lt;/config&gt;
     </code></pre>
 </li>
 
+
 <li>
-<p>Créer la classe TestVersionXml pour tester:</p>
+<p>Créer la classe PresentationWithoutSpring pour tester:</p>
 <pre><code>package presentation;
 
-import dao.IDao;
-import framework.version_xml.DependencyInjector;
-import metier.MetierImpl;
-
-public class TestVersionXml {
-    public static void main(String[] args) {
-        DependencyInjector injector = new DependencyInjector();
-        injector.loadConfig("src/main/resources/config.xml");
-        MetierImpl metier = injector.getComponent("metier", MetierImpl.class);
-        IDao dao = injector.getComponent("dao", IDao.class);
-        metier.setDao(dao);
-        System.out.println(metier.calcul());
-        }
+public class PresentationWithoutSpring {
+public static void main(String[] args) {
+try {
+DependencyInjector injector = new DependencyInjector("src/main/resources/config.xml");
+IMetier metier = (IMetier) injector.getBean("metier");
+System.out.println(metier.calcul());
+} catch (Exception e) {
+e.printStackTrace();
 }
+}
+}
+
 </code></pre>
 
 </li>
 
 <h3>Injection des dependances a travers les Annotations</h3>
+<img src="project_structure.png">
 <ol>
 <li>
 <p>Créer de la classe DependencyInjector:</p>
-<p>Cette classe permet de scanner les packages pour trouver les classes marquées avec l'annotation "@Component" pour faire L'injection des dependances via 2 mecanismes:
-<ol>
-<li>Par constructeur : Le conteneur examine les constructeurs des classes annotées avec @Component et utilise celui qui est annoté avec @Autowired pour résoudre les dépendances</li>
-<li>Par méthode setter : Le conteneur recherche les méthodes setter dans les classes annotées avec @Component, et s'il trouve une méthode annotée avec @Autowired, il injecte la dépendance appropriée via cette méthode.</li>
-</ol>
-<pre><code>
-package framework.version_annotation.dependencyInjector;
+<p>Cette classe est responsable de la gestion des beans et de l'injection de dépendances dans une application Java. Elle offre un mécanisme de configuration flexible basé sur des annotations pour faciliter la gestion des dépendances.</p>
 
-import dao.DaoImpl;
-import framework.version_annotation.annotations.Autowired;
-import framework.version_annotation.annotations.Component;
+<h3>Membres</h3>
+
+<ul>
+  <li><code>beans</code>: Une carte associant des noms de beans à des instances d'objets.</li>
+</ul>
+
+<h3>Constructeur</h3>
+
+<ul>
+  <li><code>CustomApplicationContext(String... packageNames)</code>: Le constructeur prend en paramètre une liste de noms de packages à scanner pour les composants à instancier. Il instancie automatiquement les beans et résout les dépendances entre eux.</li>
+</ul>
+
+<h3>Méthodes</h3>
+
+<ul>
+  <li><code>getBean(String beanName)</code>: Renvoie l'instance du bean correspondant au nom spécifié.</li>
+</ul>
+
+<h3>Méthodes privées</h3>
+
+<ul>
+  <li><code>instantiateBeans(String packageName)</code>: Cette méthode instancie les beans enregistrés dans les packages spécifiés. Actuellement, elle instancie manuellement quelques implémentations spécifiques (MetierImpl, DaoImpl1, DaoImpl2).</li>
+  <li><code>autowireDependencies()</code>: Cette méthode utilise la réflexion pour parcourir tous les champs des beans et injecter automatiquement les dépendances annotées avec <code>@Autowired</code>. Si un champ est également annoté avec <code>@Qualified</code>, il utilise une annotation de qualification pour identifier la dépendance appropriée à injecter.</li>
+</ul>
+<pre><code>
+package framework;
+
+import dao.DaoImpl1;
+import dao.DaoImpl2;
+import framework.annotations.Autowired;
+import framework.annotations.Component;
+import framework.annotations.Qualified;
 import metier.MetierImpl;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.Arrays;
+import java.lang.reflect.Field;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-@Component
-public class DependencyInjector {
-private final Map<Class<?>, Object> components = new HashMap<>();
-    public DependencyInjector(String... basePackages) {
-        // Scan base packages for classes marked with @Component
-        for (String basePackage : basePackages) {
-            List<Class<?>> classes = scanPackage(basePackage);
-            for (Class<?> clazz : classes) {
-                if (clazz.isAnnotationPresent(Component.class)) {
+public class CustomApplicationContext {
+private Map<String, Object> beans = new HashMap<>();
+    public CustomApplicationContext(String... packageNames) {
+        // Scan packageNames and instantiate beans
+        for (String packageName : packageNames) {
+            instantiateBeans(packageName);
+        }
+        // Autowire dependencies
+        autowireDependencies();
+    }
+    public Object getBean(String beanName) {
+        return beans.get(beanName);
+    }
+    private void instantiateBeans(String packageName) {
+        beans.put("metier", new MetierImpl());
+        beans.put("daoImplV1", new DaoImpl1());
+        beans.put("daoImplV2", new DaoImpl2());
+    }
+    private void autowireDependencies() {
+        for (Object bean : beans.values()) {
+            // Use reflection to find fields annotated with @Autowired
+            Field[] fields = bean.getClass().getDeclaredFields();
+            for (Field field : fields) {
+                if (field.isAnnotationPresent(Autowired.class)) {
+                    // Find corresponding beans from beans map and inject them
                     try {
-                        Object instance = createInstance(clazz);
-                        components.put(clazz, instance);
-                    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                        field.setAccessible(true);
+                        if (field.isAnnotationPresent(Qualified.class)) {
+                            String qualifier = field.getAnnotation(Qualified.class).value();
+                            field.set(bean, beans.get(qualifier));
+                        } else {
+                            field.set(bean, getBean(field.getName()));
+                        }
+                    } catch (IllegalAccessException e) {
                         e.printStackTrace();
                     }
                 }
             }
         }
-        // Wire dependencies
-        for (Object component : components.values()) {
-            wireDependencies(component);
-        }
-    }
-    private List<Class<?>> scanPackage(String basePackage) {
-        // Implement package scanning logic here
-        // This can be done using libraries like Reflections or by manual scanning
-        // For simplicity, let's assume we already have a list of classes in the base package
-        return Arrays.asList(DaoImpl.class, MetierImpl.class);
-    }
-    private Object createInstance(Class<?> clazz) throws IllegalAccessException, InvocationTargetException, InstantiationException, NoSuchMethodException {
-        Constructor<?>[] constructors = clazz.getConstructors();
-        for (Constructor<?> constructor : constructors) {
-            if (constructor.isAnnotationPresent(Autowired.class)) {
-                Class<?>[] parameterTypes = constructor.getParameterTypes();
-                Object[] parameters = new Object[parameterTypes.length];
-                for (int i = 0; i < parameterTypes.length; i++) {
-                    parameters[i] = components.get(parameterTypes[i]);
-                }
-                return constructor.newInstance(parameters);
-            }
-        }
-        return clazz.getDeclaredConstructor().newInstance();
-    }
-    private void wireDependencies(Object component) {
-        Class<?> clazz = component.getClass();
-        // Setter injection
-        for (Method method : clazz.getMethods()) {
-            if (method.isAnnotationPresent(Autowired.class) && method.getName().startsWith("set") && method.getParameterCount() == 1) {
-                Class<?> parameterType = method.getParameterTypes()[0];
-                Object dependency = components.get(parameterType);
-                if (dependency != null) {
-                    try {
-                        method.invoke(component, dependency);
-                    } catch (IllegalAccessException | InvocationTargetException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        }
-    }
-    public <T> T getComponent(Class<T> type) {
-        Object component = components.get(type);
-        if (component != null) {
-            return type.cast(component);
-        }
-        return null;
     }
 }
 
@@ -350,29 +346,46 @@ private final Map<Class<?>, Object> components = new HashMap<>();
 </li>
 
 <li>
-<p>Pour cela on doit creer les annotations @Component et @Autowired</p>
+<p>Pour cela on doit creer les annotations @Component, @Autowired et @Qualified</p>
 <pre>
 <code>
-package framework.version_annotation.annotations;
+package framework.annotations;
 
-import java.lang.annotation.*;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.FIELD, ElementType.CONSTRUCTOR, ElementType.METHOD})
+@Target(ElementType.FIELD)
 public @interface Autowired {
-
 }
+
 
 </code>
 <code>
-package framework.version_annotation.annotations;
+package framework.annotations;
+
 
 import java.lang.annotation.*;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 public @interface Component {
+String value() default "";
+}
 
+
+</code>
+<code>
+package framework.annotations;
+
+import java.lang.annotation.*;
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+public @interface Qualified {
+String value();
 }
 
 
@@ -381,29 +394,20 @@ public @interface Component {
 </li>
 
 <li>
-<p>Créer la classe TestAnnotationVersion pour tester les 2 types d'injections</p>
+<p>Créer la classe Presentation_CustomFramework pour tester:</p>
 <pre>
 <code>
 package presentation;
 
-import framework.version_annotation.dependencyInjector.DependencyInjector;
-import dao.DaoImpl;
-import metier.MetierImpl;
+import framework.CustomApplicationContext;
+import metier.IMetier;
 
-public class TestAnnotationVersion {
+public class Presentation_CustomFramework {
 public static void main(String[] args) {
-        // Via setters
-        DependencyInjector injector = new DependencyInjector("dao", "metier");
-        // Attempt to retrieve instances of DaoImpl and MetierImpl directly
-        DaoImpl daoImpl = injector.getComponent(DaoImpl.class);
-        MetierImpl metierImpl = injector.getComponent(MetierImpl.class);
-        metierImpl.setDao(daoImpl);
-        System.out.println(metierImpl.calcul());
-        // Via constructor
-        DependencyInjector injector_constructor = new DependencyInjector("dao", "metier");
-        MetierImpl metierImpl_constructor = injector_constructor.getComponent(MetierImpl.class);
-        System.out.println(metierImpl_constructor.calcul());
-    }
+CustomApplicationContext context = new CustomApplicationContext("dao", "metier");
+IMetier metier = (IMetier) context.getBean("metier");
+System.out.println("Result: " + metier.calcul());
+}
 }
 
 </code>
