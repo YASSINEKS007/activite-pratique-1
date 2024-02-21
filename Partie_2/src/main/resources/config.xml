@@ -1,6 +1,0 @@
-<config>
-    <component name="metier" class="metier.MetierImpl">
-        <property name="dao" ref="dao"/>
-    </component>
-    <component name="dao" class="dao.DaoImpl"/>
-</config>
