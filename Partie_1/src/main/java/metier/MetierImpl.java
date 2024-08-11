@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class MetierImpl implements IMetier{
-    @Autowired
     @Qualifier("v2")
     private IDao dao;
     @Override
@@ -16,6 +15,7 @@ public class MetierImpl implements IMetier{
         return res * 100;
     }
 
+    @Autowired
     public void setDao(IDao dao) {
         this.dao = dao;
     }

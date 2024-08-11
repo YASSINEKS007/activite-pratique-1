@@ -3,18 +3,20 @@ package framework;
 import dao.DaoImpl1;
 import dao.DaoImpl2;
 import framework.annotations.Autowired;
-import framework.annotations.Component;
 import framework.annotations.Qualified;
 import metier.MetierImpl;
 
 import java.lang.reflect.Field;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+
+
 
 public class CustomApplicationContext {
     private Map<String, Object> beans = new HashMap<>();
+    private String[] packageNames;
 
     public CustomApplicationContext(String... packageNames) {
+        this.packageNames = packageNames;
         // Scan packageNames and instantiate beans
         for (String packageName : packageNames) {
             instantiateBeans(packageName);
@@ -23,12 +25,12 @@ public class CustomApplicationContext {
         autowireDependencies();
     }
 
+
     public Object getBean(String beanName) {
         return beans.get(beanName);
     }
 
     private void instantiateBeans(String packageName) {
-
         beans.put("metier", new MetierImpl());
         beans.put("daoImplV1", new DaoImpl1());
         beans.put("daoImplV2", new DaoImpl2());

@@ -9,12 +9,17 @@ import dao.IDao;
 public class MetierImpl implements IMetier {
 
     @Autowired
-    @Qualified("daoImplV2")
+    @Qualified("daoImplV1")
     private IDao dao;
+
+    public MetierImpl() {
+    }
 
     @Override
     public double calcul() {
+
         // Some business logic that uses the dao
         return dao.save();
     }
+
 }
